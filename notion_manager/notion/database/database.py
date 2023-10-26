@@ -1,0 +1,170 @@
+from dotenv import find_dotenv, load_dotenv
+import pandas as pd
+import requests
+from tqdm import tqdm
+import structlog
+
+from notion_manager.notion.utils import NOTION_BASE_URL, get_headers
+
+load_dotenv(find_dotenv())
+
+logger = structlog.get_logger(__name__)
+
+
+class NotionDatabase:
+    def __init__(self, database_id) -> None:
+        self.database_id = database_id
+    
+    def __name__(self):
+        return self.__class__.__name__
+
+    def list_items(self):
+        """
+        List all items in a Notion database
+        :param database_id: The ID of the database
+        :return: JSON response
+        """
+        url = f"{NOTION_BASE_URL}/databases/{self.database_id}/query"
+        payload = ""
+        headers = get_headers()
+
+        response = requests.request("POST", url, headers=headers, data=payload)
+        response = response.json()
+
+        {'object': 'error', 'status': 400, 'code': 'invalid_request_url', 'message': 'Invalid request URL.'}
+
+        if response.get("object", None) == "error" and response.get("status", None) == 400:
+            raise Exception(
+                f"""
+                Error while listing items in Notion database, with the url: {url}
+                Response: {response}
+                """
+            )
+        else:
+            return response
+
+    def list_database_properties_from_item(self):
+        """
+        List all properties in a Notion database
+        :param database_id: The ID of the database
+        :return: JSON response
+        """
+
+        items = self.list_items()
+        return list(items["results"][0]["properties"].keys()) if items else list()
+
+    def delete_item(self, item_id):
+        """
+        Delete items in a Notion database
+        :param database_id: The ID of the database
+        :param item_id: The IDs of the item to delete
+        :return: JSON response
+        """
+        url = f"{NOTION_BASE_URL}/blocks/{item_id}"
+        headers = get_headers()
+
+        response = requests.request("DELETE", url, headers=headers)
+        return response.json()
+
+    def delete_items_in_database(self):
+        """
+        Delete items in a Notion database
+        :param database_id: The ID of the database
+        :return: JSON response
+        """
+        items = self.list_items()
+
+        if not items:
+            return False
+
+        elif len(items["results"]) == 0:
+            return False
+
+        elif "results" not in items:
+            return False
+
+        else:
+            for item in tqdm(items["results"]):
+                self.delete_item(item_id=item["id"])
+            return True
+    
+    def get_df_items(self) -> pd.DataFrame:
+        """
+        Get all items in a Notion database as a pandas DataFrame
+        :return: pandas DataFrame
+        """
+        items = self.list_items()
+
+        print(items)
+
+        if not items:
+            return pd.DataFrame()
+
+        elif len(items["results"]) == 0:
+            return pd.DataFrame()
+
+        elif "results" not in items:
+            return pd.DataFrame()
+
+        else:
+            df = pd.DataFrame([y['properties'] for y in items["results"]])
+            return df
+
+    def get_df(self) -> pd.DataFrame:
+        """
+        Clean a pandas DataFrame
+        :param df: pandas DataFrame to clean
+        :return: Cleaned pandas DataFrame
+        """
+        df = self.get_df_items()
+
+        for col in df.columns:
+            try:
+                df[col] = df[col].apply(lambda x: NotionDatabase.get_value_from_property(x))
+            except Exception as e:
+                logger.error(
+                    f"""
+                    Error while cleaning column {col}: {e} with Database {self.__name__()}.
+                    Example of df columns to clean:
+                    {df.head(3)[col]}
+                    """
+                )
+        return df
+
+    @staticmethod
+    def get_value_from_property(property_dict: dict) -> str:
+        """
+        :param property_dict: A dictionary of a Notion property
+        
+        """
+        try:
+            if 'title' in property_dict:
+                title = property_dict['title']
+                if len(title) > 0:
+                    return title[0]['plain_text']
+                else:
+                    return None
+            elif 'rich_text' in property_dict:
+                rich_text = property_dict['rich_text']
+                if len(rich_text) > 0:
+                    return rich_text[0]['plain_text']
+                else:
+                    return None
+            elif 'number' in property_dict:
+                return property_dict['number']
+            elif 'select' in property_dict:
+                return property_dict['select']['name']
+            elif 'multi_select' in property_dict:
+                return [x['name'] for x in property_dict['multi_select']]
+            elif 'date' in property_dict:
+                return property_dict['date']['start']
+            elif 'formula' in property_dict:
+                return property_dict['formula']['number']
+            elif 'relation' in property_dict:
+                return [x['id'] for x in property_dict['relation']]
+            elif 'rollup' in property_dict:
+                return property_dict['rollup']['number']
+            else:
+                return None
+        except IndexError or KeyError:
+            raise Exception(f"Could not get value from property: {property_dict}")

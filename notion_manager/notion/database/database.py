@@ -18,30 +18,32 @@ class NotionDatabase:
     def __name__(self):
         return self.__class__.__name__
 
-    def list_items(self):
+    def list_items(self) -> list:
         """
         List all items in a Notion database
         :param database_id: The ID of the database
-        :return: JSON response
+        :return: result
         """
         url = f"{NOTION_BASE_URL}/databases/{self.database_id}/query"
         payload = ""
         headers = get_headers()
 
-        response = requests.request("POST", url, headers=headers, data=payload)
-        response = response.json()
+        page_size = 100
+        payload = {"page_size": page_size}
 
-        {'object': 'error', 'status': 400, 'code': 'invalid_request_url', 'message': 'Invalid request URL.'}
+        results = []
+        has_more = True
 
-        if response.get("object", None) == "error" and response.get("status", None) == 400:
-            raise Exception(
-                f"""
-                Error while listing items in Notion database, with the url: {url}
-                Response: {response}
-                """
-            )
-        else:
-            return response
+        while has_more:
+            response = requests.post(url, json=payload, headers=headers)
+            data = response.json()
+            results.extend(data["results"])
+            has_more = data["has_more"]
+            if has_more:
+                payload["start_cursor"] = data["next_cursor"]
+        
+        return results
+
 
     def list_database_properties_from_item(self):
         """
@@ -51,7 +53,7 @@ class NotionDatabase:
         """
 
         items = self.list_items()
-        return list(items["results"][0]["properties"].keys()) if items else list()
+        return list(items[0]["properties"].keys()) if items else list()
 
     def delete_item(self, item_id):
         """
@@ -77,14 +79,11 @@ class NotionDatabase:
         if not items:
             return False
 
-        elif len(items["results"]) == 0:
-            return False
-
-        elif "results" not in items:
+        elif len(items) == 0:
             return False
 
         else:
-            for item in tqdm(items["results"]):
+            for item in tqdm(items):
                 self.delete_item(item_id=item["id"])
             return True
     
@@ -99,15 +98,10 @@ class NotionDatabase:
 
         if not items:
             return pd.DataFrame()
-
-        elif len(items["results"]) == 0:
+        elif len(items) == 0:
             return pd.DataFrame()
-
-        elif "results" not in items:
-            return pd.DataFrame()
-
         else:
-            df = pd.DataFrame([y['properties'] for y in items["results"]])
+            df = pd.DataFrame([y['properties'] for y in items])
             return df
 
     def get_df(self) -> pd.DataFrame:
@@ -157,9 +151,17 @@ class NotionDatabase:
             elif 'multi_select' in property_dict:
                 return [x['name'] for x in property_dict['multi_select']]
             elif 'date' in property_dict:
-                return property_dict['date']['start']
+                if property_dict["date"] == None:
+                    return None
+                else:
+                    return property_dict['date']['start']
             elif 'formula' in property_dict:
-                return property_dict['formula']['number']
+                if property_dict['formula']['type'] == "string":
+                    return property_dict['formula']['string']
+                elif property_dict['formula']['type'] == "number":
+                    return property_dict['formula']['number']
+                else:
+                    return None
             elif 'relation' in property_dict:
                 return [x['id'] for x in property_dict['relation']]
             elif 'rollup' in property_dict:

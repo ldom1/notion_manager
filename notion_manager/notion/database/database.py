@@ -1,22 +1,42 @@
-from dotenv import find_dotenv, load_dotenv
 import pandas as pd
 import requests
+from dotenv import find_dotenv, load_dotenv
 from tqdm import tqdm
-import structlog
 
+from notion_manager import config
 from notion_manager.notion.utils import NOTION_BASE_URL, get_headers
 
 load_dotenv(find_dotenv())
-
-logger = structlog.get_logger(__name__)
 
 
 class NotionDatabase:
     def __init__(self, database_id) -> None:
         self.database_id = database_id
-    
+
     def __name__(self):
         return self.__class__.__name__
+
+    @staticmethod
+    def check_property_exists(row, property):
+        """
+        Check if a property exists in a Notion database
+        :param row: The row to check
+        :param property: The property to check
+
+        :return: True if the property exists, False otherwise
+        """
+
+        if isinstance(row, dict):
+            if property in row:
+                return True
+            else:
+                return False
+
+        elif isinstance(row, pd.Series):
+            if property in row.index:
+                return True
+            else:
+                return False
 
     def list_items(self) -> list:
         """
@@ -41,9 +61,8 @@ class NotionDatabase:
             has_more = data["has_more"]
             if has_more:
                 payload["start_cursor"] = data["next_cursor"]
-        
-        return results
 
+        return results
 
     def list_database_properties_from_item(self):
         """
@@ -86,7 +105,7 @@ class NotionDatabase:
             for item in tqdm(items):
                 self.delete_item(item_id=item["id"])
             return True
-    
+
     def get_df_items(self) -> pd.DataFrame:
         """
         Get all items in a Notion database as a pandas DataFrame
@@ -94,14 +113,12 @@ class NotionDatabase:
         """
         items = self.list_items()
 
-        print(items)
-
         if not items:
             return pd.DataFrame()
         elif len(items) == 0:
             return pd.DataFrame()
         else:
-            df = pd.DataFrame([y['properties'] for y in items])
+            df = pd.DataFrame([y["properties"] for y in items])
             return df
 
     def get_df(self) -> pd.DataFrame:
@@ -114,9 +131,11 @@ class NotionDatabase:
 
         for col in df.columns:
             try:
-                df[col] = df[col].apply(lambda x: NotionDatabase.get_value_from_property(x))
+                df[col] = df[col].apply(
+                    lambda x: NotionDatabase.get_value_from_property(x)
+                )
             except Exception as e:
-                logger.error(
+                config.logger.error(
                     f"""
                     Error while cleaning column {col}: {e} with Database {self.__name__()}.
                     Example of df columns to clean:
@@ -129,43 +148,43 @@ class NotionDatabase:
     def get_value_from_property(property_dict: dict) -> str:
         """
         :param property_dict: A dictionary of a Notion property
-        
+
         """
         try:
-            if 'title' in property_dict:
-                title = property_dict['title']
+            if "title" in property_dict:
+                title = property_dict["title"]
                 if len(title) > 0:
-                    return title[0]['plain_text']
+                    return title[0]["plain_text"]
                 else:
                     return None
-            elif 'rich_text' in property_dict:
-                rich_text = property_dict['rich_text']
+            elif "rich_text" in property_dict:
+                rich_text = property_dict["rich_text"]
                 if len(rich_text) > 0:
-                    return rich_text[0]['plain_text']
+                    return rich_text[0]["plain_text"]
                 else:
                     return None
-            elif 'number' in property_dict:
-                return property_dict['number']
-            elif 'select' in property_dict:
-                return property_dict['select']['name']
-            elif 'multi_select' in property_dict:
-                return [x['name'] for x in property_dict['multi_select']]
-            elif 'date' in property_dict:
-                if property_dict["date"] == None:
+            elif "number" in property_dict:
+                return property_dict["number"]
+            elif "select" in property_dict:
+                return property_dict["select"]["name"]
+            elif "multi_select" in property_dict:
+                return [x["name"] for x in property_dict["multi_select"]]
+            elif "date" in property_dict:
+                if property_dict["date"] is None:
                     return None
                 else:
-                    return property_dict['date']['start']
-            elif 'formula' in property_dict:
-                if property_dict['formula']['type'] == "string":
-                    return property_dict['formula']['string']
-                elif property_dict['formula']['type'] == "number":
-                    return property_dict['formula']['number']
+                    return property_dict["date"]["start"]
+            elif "formula" in property_dict:
+                if property_dict["formula"]["type"] == "string":
+                    return property_dict["formula"]["string"]
+                elif property_dict["formula"]["type"] == "number":
+                    return property_dict["formula"]["number"]
                 else:
                     return None
-            elif 'relation' in property_dict:
-                return [x['id'] for x in property_dict['relation']]
-            elif 'rollup' in property_dict:
-                return property_dict['rollup']['number']
+            elif "relation" in property_dict:
+                return [x["id"] for x in property_dict["relation"]]
+            elif "rollup" in property_dict:
+                return property_dict["rollup"]["number"]
             else:
                 return None
         except IndexError or KeyError:

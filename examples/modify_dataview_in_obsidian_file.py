@@ -1,15 +1,15 @@
 import os
 
 from notion_manager.obsidian_formatter.config import OBSIDIAN_VAULT_PATH
-from notion_manager.obsidian_formatter.utils import (
-    get_files_in_subfolders,
-    read_md_file,
-    write_md_file,
-)
 from notion_manager.obsidian_formatter.dataview import (
     get_data_view_from_md_file,
     modify_data_view,
     modify_multiple_data_view_in_md_file,
+)
+from notion_manager.obsidian_formatter.utils import (
+    get_files_in_subfolders,
+    read_md_file,
+    write_md_file,
 )
 
 folder_of_interest = "3 - RESOURCES/People"

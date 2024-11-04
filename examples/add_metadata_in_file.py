@@ -1,20 +1,19 @@
 import os
 
 from notion_manager.obsidian_formatter.config import OBSIDIAN_VAULT_PATH
-from notion_manager.obsidian_formatter.utils import (
-    read_md_file,
-    write_md_file,
-    retrieve_date_from_file_name_if_exists,
-)
 from notion_manager.obsidian_formatter.metadata import (
-    generate_md_file_metadata,
     add_metadata_to_md_file,
+    generate_md_file_metadata,
 )
 from notion_manager.obsidian_formatter.tags import (
     get_tags_from_md_file,
     remove_tags_from_md_file,
 )
-
+from notion_manager.obsidian_formatter.utils import (
+    read_md_file,
+    retrieve_date_from_file_name_if_exists,
+    write_md_file,
+)
 
 folder_of_interest = "3 - RESOURCES/Exposition"
 list_of_files = [

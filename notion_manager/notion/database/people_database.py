@@ -1,5 +1,6 @@
-import os
 import requests
+
+from notion_manager import config
 from notion_manager.notion.database.database import NotionDatabase
 from notion_manager.notion.utils import (
     NOTION_BASE_URL,
@@ -12,7 +13,19 @@ from notion_manager.notion.utils import (
 
 class NotionPeopleDatabase(NotionDatabase):
     def __init__(self) -> None:
-        super().__init__(database_id=os.environ.get("NOTION_PEOPLE_DATABASE_ID"))
+        super().__init__(database_id=config.NOTION_PEOPLE_DATABASE_ID)
+
+    def get_people_name_from_id(self, people_id: str) -> str:
+        """
+        Get the people name from the people id
+        :param people_id: People id
+        :return: People name
+        """
+        items = self.list_items()
+        for item in items:
+            if item["id"] == people_id:
+                return item["properties"]["Nom"]["title"][0]["text"]["content"]
+        return None
 
     def list_database_properties(self):
         """

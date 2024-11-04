@@ -70,6 +70,7 @@ def process_realise_summary(
         realise_summary["project"] == mapping_prj["timesheet_name"]
     ].copy()
 
+    # Convert number to integer
     realise_summary_project["year"] = pd.to_numeric(
         realise_summary_project["year"], downcast="integer"
     )
@@ -79,9 +80,13 @@ def process_realise_summary(
     realise_summary_project["week"] = pd.to_numeric(
         realise_summary_project["week"], downcast="integer"
     )
+
+    # Convert volume to float
     realise_summary_project["volume"] = pd.to_numeric(
         realise_summary_project["volume"], downcast="float"
     )
+
+    # Add project name & page name
     realise_summary_project["project"] = mapping_prj["notion_name"]
     realise_summary_project["page_name"] = (
         realise_summary_project["client"].astype(str)
@@ -94,9 +99,12 @@ def process_realise_summary(
         + realise_summary_project["week"].astype(str)
     )
 
+    # Adapt the month column based on the year and week
     realise_summary_project["month"] = realise_summary_project.apply(
         lambda x: get_month_from_year_and_week(year=x["year"], week=x["week"]), axis=1
     )
+
+    # Group by to get the volume per page_name, client, project, username, year, month, week
     realise_summary_project = (
         realise_summary_project.groupby(
             ["page_name", "client", "project", "username", "year", "month", "week"]
@@ -104,6 +112,9 @@ def process_realise_summary(
         .agg({"volume": "sum"})
         .reset_index()
     )
+
+    # Round the volume to 2 decimals
+    realise_summary_project["volume"] = realise_summary_project["volume"].round(2)
 
     return realise_summary_project
 
